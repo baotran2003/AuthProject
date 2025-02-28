@@ -10,5 +10,6 @@ let userSchema = new mongoose.Schema({
     },
 });
 
+// Add plugin passportLocalMongoose vào schema
 userSchema.plugin(passportLocalMongoose, {usernameField: 'email'});
 module.exports = mongoose.model("User", userSchema);
