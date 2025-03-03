@@ -25,6 +25,7 @@ Logout: Users can securely log out of their accounts.
 Password Recovery: Users can reset their password by requesting a password reset link via email.
 
 Password Change: Authenticated users can change their password from the dashboard.
+
 Usage
 Sign Up: Navigate to /signup to create a new account.
 
@@ -40,6 +41,3 @@ Notes
 Ensure MongoDB is running locally or update the DATABASE_LOCAL variable to your MongoDB connection string.
 
 Configure Nodemailer with a valid Gmail account for sending emails.
-
-License
-This project is open-source and available under the MIT License.
