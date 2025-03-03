@@ -155,4 +155,109 @@ router.post("/forgot", (req, res, next) => {
     );
 });
 
+// Saving new password in DB
+router.post("/reset/:token", (req, res) => {
+    async.waterfall(
+        [
+            // Bước 1: Tìm user, kiểm tra token, và đặt mật khẩu mới
+            (done) => {
+                console.log("Checking token from URL:", req.params.token);
+                User.findOne({
+                    resetPasswordToken: req.params.token,
+                    resetPasswordExpires: { $gt: Date.now() }
+                })
+                    .then((user) => {
+                        console.log("Current time:", new Date(), "Query result:", user);
+                        if (!user) {
+                            req.flash("error_msg", "Password reset token is invalid or has expired.");
+                            return res.redirect("/forgot");
+                        }
+
+                        if (req.body.password !== req.body.confirmpassword) {
+                            req.flash("error_msg", "Passwords do not match.");
+                            return res.redirect(`/reset/${req.params.token}`);
+                        }
+
+                        user.setPassword(req.body.password, (err) => {
+                            if (err) {
+                                console.error("Error setting password:", err);
+                                req.flash("error_msg", "Error setting new password: " + err);
+                                return res.redirect(`/reset/${req.params.token}`);
+                            }
+                            user.resetPasswordToken = undefined;
+                            user.resetPasswordExpires = undefined;
+                            user.save((err) => {
+                                if (err) {
+                                    console.error("Error saving user:", err);
+                                    req.flash("error_msg", "Error saving user: " + err);
+                                    return res.redirect(`/reset/${req.params.token}`);
+                                }
+                                req.login(user, (err) => {
+                                    if (err) {
+                                        console.error("Error logging in:", err);
+                                        return done(err);
+                                    }
+                                    console.log("Password reset and user logged in:", user.email);
+                                    done(null, user);
+                                });
+                            });
+                        });
+                    })
+                    .catch((err) => {
+                        console.error("Database error:", err);
+                        req.flash("error_msg", "Error: " + err);
+                        return res.redirect("/forgot");
+                    });
+            },
+            // Bước 2: Gửi email xác nhận
+            (user) => {
+                if (!user || !user.email) {
+                    console.error("No valid user or email for sending confirmation:", user);
+                    req.flash("error_msg", "Failed to send confirmation email due to invalid user.");
+                    return res.redirect("/login");
+                }
+
+                let smtpTransport = nodemailer.createTransport({
+                    service: "Gmail",
+                    auth: {
+                        user: process.env.GMAIL_EMAIL,
+                        pass: process.env.GMAIL_PASSWORD,
+                    },
+                });
+
+                let mailOptions = {
+                    to: user.email,
+                    from: process.env.GMAIL_EMAIL,
+                    subject: "Your password has been changed.",
+                    text:
+                        "Hello, " +
+                        user.email +
+                        "\n\n" +
+                        "This is a confirmation that the password for your account " +
+                        user.email +
+                        " has been changed.",
+                };
+
+                smtpTransport.sendMail(mailOptions, (err) => {
+                    if (err) {
+                        console.error("Send mail error:", err.message);
+                        req.flash("error_msg", "Failed to send confirmation email.");
+                    } else {
+                        console.log("Email sent successfully to:", user.email);
+                        req.flash("success_msg", "Your password has been changed successfully.");
+                    }
+                    res.redirect("/login");
+                });
+            },
+        ],
+        (err) => {
+            if (err) {
+                console.error("Waterfall error:", err);
+                req.flash("error_msg", "An error occurred during password reset.");
+                res.redirect("/forgot");
+            }
+        }
+    );
+});
+
 module.exports = router;
