@@ -43,6 +43,21 @@ router.get("/forgot", (req, res) => {
     res.render("forgot");
 });
 
+router.get("/reset/:token", (req, res) => {
+    User.findOne({ resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: Date.now() } })
+        .then((user) => {
+            if (!user) {
+                req.flash("error_msg", "Password reset token in invalid or has been expired.");
+                res.redirect("/forgot");
+            }
+            res.render("newpassword", { token: req.params.token });
+        })
+        .catch((err) => {
+            req.flash("error_msg", "Error: " + err);
+            req.redirect("/forgot");
+        });
+});
+
 // POST routes
 router.post(
     "/login",
@@ -73,7 +88,6 @@ router.post("/signup", (req, res) => {
     });
 });
 
-// Routes to handle forgot password
 router.post("/forgot", (req, res, next) => {
     async.waterfall(
         [
@@ -92,11 +106,9 @@ router.post("/forgot", (req, res, next) => {
                         }
                         user.resetPasswordToken = token;
                         user.resetPasswordExpires = Date.now() + 1800000; // 30 phút
-
-                        // Sửa .save() thành Promise
                         user.save()
-                            .then(() => done(null, token, user)) // Thành công, gọi done
-                            .catch((err) => done(err)); // Lỗi, truyền lỗi vào done
+                            .then(() => done(null, token, user))
+                            .catch((err) => done(err));
                     })
                     .catch((err) => {
                         req.flash("error_msg", "Error: " + err);
@@ -106,15 +118,23 @@ router.post("/forgot", (req, res, next) => {
             (token, user) => {
                 let smtpTransport = nodemailer.createTransport({
                     service: "Gmail",
+                    host: "smtp.gmail.com",
+                    port: 587,
+                    secure: false,
                     auth: {
-                        user: process.env.GMAIL_EMAIL, // Sửa chuỗi thành biến môi trường
+                        user: process.env.GMAIL_EMAIL,
                         pass: process.env.GMAIL_PASSWORD,
                     },
                 });
 
+                console.log("SMTP Config:", {
+                    user: process.env.GMAIL_EMAIL,
+                    pass: process.env.GMAIL_PASSWORD,
+                });
+
                 let mailOptions = {
                     to: user.email,
-                    from: "temtemtem1810@gmail.com", // Thay bằng process.env.GMAIL_EMAIL nếu muốn
+                    from: process.env.GMAIL_EMAIL,
                     subject: "Recovery Email from Auth Project",
                     text:
                         "Please click the following link to recover your password: \n\n" +
@@ -127,13 +147,22 @@ router.post("/forgot", (req, res, next) => {
                 };
 
                 smtpTransport.sendMail(mailOptions, (err) => {
+                    if (err) {
+                        console.error("Send mail error:", err.message, "Full error:", err);
+                        req.flash("error_msg", "Failed to send email: " + err.message);
+                        return res.redirect("/forgot");
+                    }
+                    console.log("Email sent successfully to:", user.email);
                     req.flash("success_msg", "Email sent with further instructions. Please check that.");
                     res.redirect("/forgot");
                 });
             },
         ],
         (err) => {
-            if (err) res.redirect("/forgot");
+            if (err) {
+                console.error("Waterfall error:", err);
+                res.redirect("/forgot");
+            }
         }
     );
 });
