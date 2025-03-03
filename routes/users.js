@@ -58,6 +58,10 @@ router.get("/reset/:token", (req, res) => {
         });
 });
 
+router.get("/password/change", (req, res) => {
+    res.render("changepassword");
+});
+
 // POST routes
 router.post(
     "/login",
@@ -68,6 +72,29 @@ router.post(
     })
 );
 
+// Change password
+router.post("/password/change", (req, res) => {
+    if (req.body.password !== req.body.confirmpassword) {
+        req.flash("error_msg", "Password do not match. Try again !!");
+        return res.redirect("/password/change");
+    }
+
+    User.findOne({ email: req.user.email })
+        .then((user) => {
+            user.setPassword(req.body.password, (err) => {
+                user.save().then((user) => {
+                    req.flash("error_msg", "Password changed successfully.");
+                    res.redirect("/dashboard");
+                });
+            });
+        })
+        .catch((err) => {
+            req.flash("error_msg", "Error: " + err);
+            res.redirect("/password/change");
+        });
+});
+
+// Routes to handle forgot password
 router.post("/forgot", (req, res, next) => {
     async.waterfall(
         [
@@ -164,7 +191,7 @@ router.post("/reset/:token", (req, res) => {
                 console.log("Checking token from URL:", req.params.token);
                 User.findOne({
                     resetPasswordToken: req.params.token,
-                    resetPasswordExpires: { $gt: Date.now() }
+                    resetPasswordExpires: { $gt: Date.now() },
                 })
                     .then((user) => {
                         console.log("Current time:", new Date(), "Query result:", user);
