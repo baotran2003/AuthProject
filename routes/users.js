@@ -63,6 +63,25 @@ router.get("/password/change", (req, res) => {
 });
 
 // POST routes
+router.post("/signup", (req, res) => {
+    let { name, email, password } = req.body;
+    let userData = {
+        name: name,
+        email: email,
+    };
+
+    User.register(userData, password, (err, user) => {
+        if (err) {
+            req.flash("error_msg", "Error: " + err);
+            res.redirect("/signup");
+        }
+        passport.authenticate("local")(req, res, () => {
+            req.flash("success_msg", "Account created successfully.");
+            res.redirect("/login");
+        });
+    });
+});
+
 router.post(
     "/login",
     passport.authenticate("local", {
@@ -195,6 +214,9 @@ router.post("/reset/:token", (req, res) => {
                 })
                     .then((user) => {
                         console.log("Current time:", new Date(), "Query result:", user);
+                        console.log("Current time:", new Date());
+                        console.log("Token from DB:", user?.resetPasswordToken);
+                        console.log("Expiry time from DB:", user?.resetPasswordExpires);
                         if (!user) {
                             req.flash("error_msg", "Password reset token is invalid or has expired.");
                             return res.redirect("/forgot");
